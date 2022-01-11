@@ -1,7 +1,6 @@
 // Day 19.cpp : This file contains the 'main' function. Program execution begins and ends there.
 // https://adventofcode.com/2021/day/19
 
-#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <fstream>
@@ -66,7 +65,7 @@ struct Scanner
 	vector<vector<double>> rotationMatrix;
 	vector3 shift;
 
-	pair<unordered_set<vector3>, unordered_set<vector3>> findCommonBeacons(Scanner const& s);
+	pair<unordered_set<vector3>, unordered_set<vector3>> findCommonBeacons(Scanner const& destination);
 
 	void computeTransformation(Scanner const& s, const pair<unordered_set<vector3>, unordered_set<vector3>>&);
 	void computeDistances();
@@ -198,297 +197,7 @@ void readSolution()
 	}
 }
 
-unordered_map<double, unordered_set<std::pair<vector3, vector3>, PairHash>> getDistancesOfScanner(vector<Scanner>::const_reference scanner1)
-{
-	unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>> result;
-	for (std::size_t i = 0; i < scanner1.points.size(); ++i)
-	{
-		for (std::size_t j = i + 1; j < scanner1.points.size(); ++j)
-		{
-			if(i != j)
-			{
-				const auto aux = getDistance(scanner1.points[i], scanner1.points[j]);
-				result[aux].insert(std::make_pair(scanner1.points[i], scanner1.points[j]));
-			}
-		}
-	}
-	return result;
-}
-
-Scanner connect2Scanners(vector<Scanner>::const_reference scanners1, vector<Scanner>::const_reference scanners2, const vector<vector<double>>& rotationMatrix, const vector3& shift)
-{
-	unordered_set<vector3> result;
-
-	for (const auto& point : scanners1.points)
-	{
-		result.insert(point);
-	}
-
-	for (const auto& point : scanners2.points)
-	{
-		auto aux = multiplyMatrices(rotationMatrix, point);
-		aux.x += shift.x;
-		aux.y += shift.y;
-		aux.z += shift.z;
-
-		aux.x = round(aux.x);
-		aux.y = round(aux.y);
-		aux.z = round(aux.z);
-
-		if (solution.find(aux) == solution.end())
-		{
-			//throw std::exception("done an oopsie");
-		}
-
-		result.insert(aux);
-	}
-
-	return Scanner{scanners1.id, true, vector<vector3>(result.begin(), result.end())};
-}
-
-pair<vector<pair<vector3, vector3>>, vector<pair<vector3, vector3>>>
-extractCommonPoints(
-	const unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>>& distance1,
-	unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>>& distance2,
-	int counter)
-{
-
-	unordered_map<vector3, int> pointFrequency1;
-	unordered_map<vector3, int> pointFrequency2;
-
-	unordered_map<double, pair<vector3, vector3>> vectors1;
-	unordered_map<double, pair<vector3, vector3>> vectors2;
-
-	for (auto& [distance, points] : distance1)
-	{
-		if (distance2.find(distance) != distance2.end())
-		{
-			if (auto aux = distance2[distance];
-				points.size() == 1 and aux.size() == 1)
-			{
-				const auto firstVector = *(points.begin());
-				const auto secondVector = *(aux.begin());
-				vectors1[distance] = firstVector;
-				vectors2[distance] = secondVector;
-			}
-
-		}
-	}
-
-	for (auto it = vectors1.begin(); it != vectors1.end();)
-	{
-		if (vectors2.find(it->first) == vectors2.end())
-			it = vectors1.erase(it);
-		else
-			++it;
-	}
-
-	for (auto it = vectors2.begin(); it != vectors2.end();)
-	{
-		if (vectors1.find(it->first) == vectors1.end())
-			it = vectors2.erase(it);
-		else
-			++it;
-	}
-	/*vectors1.erase(
-		std::remove_if(
-			vectors1.begin(),
-			vectors1.end(),
-			[&vectors2](const std::pair<double, std::pair<vector3, vector3>>& pair)
-			{
-				return (vectors2.find(pair.first) == vectors2.end()) == false;
-			}
-		),
-		vectors1.end()
-				);*/
-
-
-
-	if (counter == 66)
-	{
-		vector<pair<vector3, vector3>> result1;
-		result1.reserve(vectors1.size());
-
-		for (const auto& [_, second] : vectors1)
-		{
-			result1.push_back(second);
-		}
-
-		vector<pair<vector3, vector3>> result2;
-		result2.reserve(vectors2.size());
-
-		for (const auto& [_, second] : vectors2)
-		{
-			result2.push_back(second);
-		}
-
-		return make_pair(result1, result2);
-	}
-
-	for (const auto& [first, second] : vectors1)
-	{
-		pointFrequency1[second.first]++;
-		pointFrequency1[second.second]++;
-	}
-
-	for (const auto& [first, second] : vectors2)
-	{
-		pointFrequency2[second.first]++;
-		pointFrequency2[second.second]++;
-	}
-
-	//std::map<int, int> mostProbableNumberOfPoints;
-	//for (const auto & [_, second] : pointFrequency1)
-	//{
-	//	mostProbableNumberOfPoints[second]++;
-	//}
-	///*for (const auto& [_, second] : pointFrequency2)
-	//{
-	//	mostProbableNumberOfPoints[second]++;
-	//}*/
-
-	//auto max = std::max_element(mostProbableNumberOfPoints.begin(), mostProbableNumberOfPoints.end(),
-	//	[](const std::pair<int, int>& p1, const std::pair<int, int>& p2) {
-	//		return p1.second < p2.second; });
-
-	//for (auto it = vectors1.begin(); it != vectors1.end();)
-	//{
-	//	if (pointFrequency1[it->second.first] != max->second - 1 or pointFrequency1[it->second.second] != max->second - 1)
-	//		it = vectors1.erase(it);
-	//	else
-	//		++it;
-	//}
-
-	//for (auto it = vectors2.begin(); it != vectors2.end();)
-	//{
-	//	if (pointFrequency2[it->second.first] != max->second - 1 or pointFrequency2[it->second.second] != max->second - 1)
-	//		it = vectors2.erase(it);
-	//	else
-	//		++it;
-	//}
-
-
-	for (auto it = vectors1.begin(); it != vectors1.end();)
-	{
-		if (vectors2.find(it->first) == vectors2.end())
-			it = vectors1.erase(it);
-		else
-			++it;
-	}
-
-	for (auto it = vectors2.begin(); it != vectors2.end();)
-	{
-		if (vectors1.find(it->first) == vectors1.end())
-			it = vectors2.erase(it);
-		else
-			++it;
-	}
-	{
-		vector<pair<vector3, vector3>> result1;
-		result1.reserve(vectors1.size());
-		for (const auto& [_, second] : vectors1)
-		{
-			result1.push_back(second);
-		}
-
-		vector<pair<vector3, vector3>> result2;
-		result2.reserve(vectors2.size());
-		for (const auto& [_, second] : vectors2)
-		{
-			result2.push_back(second);
-		}
-
-		return make_pair(result1, result2);
-	}
-}
-
-Scanner doWork(vector<Scanner>::const_reference scanner1, vector<Scanner>::const_reference scanner2)
-{
-	auto distance1 = getDistancesOfScanner(scanner1);
-	auto distance2 = getDistancesOfScanner(scanner2);
-
-	int counter = 0;
-
-	for (const auto& value : distance1)
-	{
-		if(distance2.find(value.first) != distance2.end())
-		{
-			counter++;
-		}
-	}
-
-	// HACK just an assumption
-	if (counter >= 66)
-	{
-		// TODO implement the rotations and reverence point calculations
-		auto [vectors1, vectors2] =
-			extractCommonPoints(distance1, distance2, counter);
-
-		if(vectors1.empty() or vectors2.empty())
-			return Scanner{ -1, false, vector<vector3>() };
-
-		stable_sort(vectors1.begin(), vectors1.end(),
-			[](const pair<vector3, vector3>& a, const pair<vector3, vector3>& b) -> bool
-			{
-				return getDistance(a.first, a.second) < getDistance(b.first, b.second);
-			});
-
-		stable_sort(vectors2.begin(), vectors2.end(),
-			[](const pair<vector3, vector3>& a, const pair<vector3, vector3>& b) -> bool
-			{
-				return getDistance(a.first, a.second) < getDistance(b.first, b.second);
-			});
-
-		const auto rotationMatrix = getRotationMatrix3(vectors2, vectors1);
-
-		const auto shiftMatrix = computeTranslation(vectors1, vectors2, rotationMatrix);
-
-		auto result = connect2Scanners(scanner1, scanner2, rotationMatrix, shiftMatrix);
-
-		return result;
-	}
-
-	return Scanner{ -1, false, vector<vector3>() };
-}
-
-Scanner solve1()
-{
-	vector<Scanner> scanners = readInput();
-
-	Scanner scanner;
-	bool firstPass = true;
-	for (auto i = 0L; i < scanners.size() - 1; ++i)
-	{
-		for (int j = i + 1; j < scanners.size(); ++j)
-		{
-			if ( firstPass == true and i != j and scanners[j].used == false)
-			{
-				const Scanner aux = doWork(scanners[i], scanners[j]);
-				if (aux.id != -1)
-				{
-					scanner = aux;
-					firstPass = false;
-					scanners[i].used = true;
-					scanners[j].used = true;
-				}
-			}
-			else if(scanners[j].used == false and firstPass == false and i != j)
-			{
-				const Scanner aux = doWork(scanner, scanners[j]);
-				if (aux.id != -1)
-				{
-					scanner = aux;
-					scanners[j].used = true;
-				}
-			}
-		}
-	}
-
-	// TODO implement the math for finding the number of beacons
-	return scanner;
-}
-
-void solve2()
+void solve()
 {
 	vector<Scanner> scanners = readInput();
 	vector known{ scanners[0] };
@@ -538,7 +247,7 @@ void solve2()
 		vector3 newShift = scanners[references[0]].shift;
 		vector<vector<double>> newRotationMatrix = scanners[references[0]].rotationMatrix;
 
-		for (int j = 1; j < references.size(); ++j)
+		for (auto j = 1ULL; j < references.size(); ++j)
 		{
 			auto rotMat = scanners[references[j]].rotationMatrix;
 			newRotationMatrix = multiplyMatrices(rotMat, newRotationMatrix);
@@ -568,7 +277,7 @@ void solve2()
 		}
 	}
 
-	for (int i = 0; i < scanners.size(); ++i)
+	for (int i = 0ULL; i < scanners.size(); ++i)
 	{
 		
 		for (const auto & point : scanners[i].points)
@@ -619,7 +328,7 @@ int main()
 
 	readSolution();
 	const auto start = high_resolution_clock::now();
-	solve2();
+	solve();
 	const auto stop = high_resolution_clock::now();
 
 	const auto elapsed = duration_cast<milliseconds>(stop - start).count();

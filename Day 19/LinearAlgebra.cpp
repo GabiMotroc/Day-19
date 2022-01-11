@@ -30,40 +30,12 @@ bool areSame(const double a, const double b)
 	return fabs(a - b) < epsilon;
 }
 
-vector3 transform2DArrayIntoPoint(const std::vector<std::vector<double>>& a)
-{
-	return vector3{ a[0][0], a[1][0], a[2][0] };
-}
 
 double getDistance(const vector3& a, const vector3& b)
 {
 	auto result = pow(b.x - a.x, 2) + pow(b.y - a.y, 2) + pow(b.z - a.z, 2);
 	result = sqrt(result);
 	return result;
-}
-
-vector3 normalizeVector(const vector3& a)
-{
-	const double magnitude = getDistance(a, vector3{ 0, 0, 0 });
-	return vector3{ a.x / magnitude, a.y / magnitude, a.z / magnitude };
-}
-
-vector3 getVector(std::vector<std::pair<vector3, vector3>>::const_reference pair)
-{
-	return vector3{ pair.second.x - pair.first.x , pair.second.y - pair.first.y, pair.second.z - pair.first.z };
-}
-
-vector3 getCrossProduct(const vector3& a, const vector3& b)
-{
-	const auto x = a.y * b.z - a.z * b.y;
-	const auto y = a.z * b.x - a.x * b.z;
-	const auto z = a.x * b.y - a.y * b.x;
-	return vector3{ x, y, z };
-}
-
-double getDotProduct(const vector3& a, const vector3& b)
-{
-	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 std::vector<std::vector<double>> transformPointTo2DArray(const vector3& point)
@@ -115,28 +87,6 @@ vector3 multiplyMatrices(const std::vector<std::vector<double>>& a, const vector
 	return result2;
 }
 
-std::vector<std::vector<double>> addMatrices(const std::vector<std::vector<double>>& a, const std::vector<std::vector<double>>& b)
-{
-	const int N = a.size();
-	const int M = b.size();
-	const int K = b[0].size();
-
-	assert(a[0].size() == static_cast<size_t>(M));
-
-	std::vector<std::vector<double>> result = generateMatrix(N, K);
-
-	for (int i = 0; i < N; ++i)
-	{
-		for (int j = 0; j < K; ++j)
-		{
-			result[i][j] = a[i][j] + b[i][j];
-		}
-	}
-
-	return result;
-
-}
-
 std::vector<std::vector<double>> multiplyWithScalar(const std::vector<std::vector<double>>& vector, double aux)
 {
 	auto result = vector;
@@ -148,65 +98,6 @@ std::vector<std::vector<double>> multiplyWithScalar(const std::vector<std::vecto
 			value *= aux;
 		}
 	}
-
-	return result;
-}
-
-std::vector<std::vector<double>> getRotationMatrix(const vector3& first, const vector3& second)
-{
-	auto a = normalizeVector(first);
-	auto b = normalizeVector(second);
-
-	auto crossProduct = getCrossProduct(a, b);
-	auto sine = getDistance(crossProduct, vector3{ 0, 0, 0 });
-	auto dotProduct = getDotProduct(a, b);
-
-	std::vector<std::vector<double>> I =
-	{
-		{1, 0, 0},
-		{0, 1, 0},
-		{0, 0, 1}
-	};
-
-	std::vector<std::vector<double>> vDubios =
-	{
-		{0,				-crossProduct.z, crossProduct.y},
-		{crossProduct.z, 0,				-crossProduct.x},
-		{-crossProduct.y, crossProduct.x, 0			   }
-	};
-
-	double aux = (1 - dotProduct) / (sine * sine);
-
-	const auto sum = addMatrices(I, vDubios);
-	const auto vDubiosSquared = multiplyMatrices(vDubios, vDubios);
-	const auto altSum = multiplyWithScalar(vDubiosSquared, aux);
-	auto result = addMatrices(sum, altSum);
-
-	return result;
-}
-
-vector3 findCenterOfGravity(const std::vector<std::pair<vector3, vector3>>& vectors)
-{
-	std::unordered_set<vector3> vector;
-
-	for (const auto& pair : vectors)
-	{
-		vector.insert(pair.first);
-		vector.insert(pair.second);
-	}
-
-	vector3 result;
-
-	for (const auto& point : vector)
-	{
-		result.x += point.x;
-		result.y += point.y;
-		result.z += point.z;
-	}
-
-	result.x = result.x / static_cast<double>(vector.size());
-	result.y = result.y / static_cast<double>(vector.size());
-	result.z = result.z / static_cast<double>(vector.size());
 
 	return result;
 }
@@ -284,99 +175,11 @@ std::vector<std::vector<double>> getRotationMatrix2(const vector3& first, const 
 
 	result = transpose(result);
 
-	if(!isDeterminantEqualTo1(result))
-	{
-		const std::vector<std::vector<double>> aux =
-		{
-			{1, 0, 0},
-			{0, 1, 0},
-			{0, 0, -1}
-		};
-
-		result = multiplyWithScalar(result, -1);
-		//result = multiplyMatrices(result, aux);
-	}
-
-	const auto rotated = multiplyMatrices(result, first);
-
-	if (!(second == rotated))
+	if (const auto rotated = multiplyMatrices(result, first); !(second == rotated))
 	{
 		throw 100;
 	}
 
-	if(!isDeterminantEqualTo1(result))
-	{
-		throw 200;
-	}
-
-	return result;
-}
-
-std::vector<std::vector<double>> getRotationMatrix3(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b)
-{
-	const auto centroidA = findCenterOfGravity(a); 
-	const auto centroidB = findCenterOfGravity(b);
-
-	std::unordered_set<vector3> firstVectors;
-	std::unordered_set<vector3> secondsVectors;
-
-	for (const auto& [fst, snd] : a)
-	{
-		firstVectors.insert(vector3{ fst.x - centroidA.x, fst.y - centroidA.y, fst.z - centroidA.z });
-		firstVectors.insert(vector3{ snd.x - centroidA.x, snd.y - centroidA.y, snd.z - centroidA.z });
-	}
-
-	for (const auto& [fst, snd] : b)
-	{
-		secondsVectors.insert(vector3{ fst.x - centroidB.x, fst.y - centroidB.y, fst.z - centroidB.z });
-		secondsVectors.insert(vector3{ snd.x - centroidB.x, snd.y - centroidB.y, snd.z - centroidB.z });
-	}
-
-	std::vector<std::vector<double>> result;
-
-	for (const auto& firstVector : firstVectors)
-	{
-		for (const auto& secondVector : secondsVectors)
-		{
-			if(areSame(fabs(firstVector.x), fabs(secondVector.x))
-				and areSame(fabs(firstVector.y), fabs(secondVector.y))
-				and areSame(fabs(firstVector.z), fabs(secondVector.z)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-			if (areSame(fabs(firstVector.x), fabs(secondVector.y))
-				and areSame(fabs(firstVector.y), fabs(secondVector.z))
-				and areSame(fabs(firstVector.z), fabs(secondVector.x)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-			if (areSame(fabs(firstVector.x), fabs(secondVector.z))
-				and areSame(fabs(firstVector.y), fabs(secondVector.x))
-				and areSame(fabs(firstVector.z), fabs(secondVector.y)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-			if (areSame(fabs(firstVector.x), fabs(secondVector.x))
-				and areSame(fabs(firstVector.y), fabs(secondVector.z))
-				and areSame(fabs(firstVector.z), fabs(secondVector.y)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-			if (areSame(fabs(firstVector.x), fabs(secondVector.z))
-				and areSame(fabs(firstVector.y), fabs(secondVector.y))
-				and areSame(fabs(firstVector.z), fabs(secondVector.x)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-			if (areSame(fabs(firstVector.x), fabs(secondVector.y))
-				and areSame(fabs(firstVector.y), fabs(secondVector.x))
-				and areSame(fabs(firstVector.z), fabs(secondVector.z)))
-			{
-				return getRotationMatrix2(firstVector, secondVector);
-			}
-		}
-	}
-	
 	return result;
 }
 
@@ -446,22 +249,6 @@ std::vector<std::vector<double>> getRotationMatrix3(const std::unordered_set<vec
 	return result;
 }
 
-vector3 computeTranslation(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b, const std::vector<std::vector<double>>& rotationMatrix)
-{
-	const auto firstPoint = findCenterOfGravity(a);
-
-	auto secondPoint = findCenterOfGravity(b);
-	secondPoint = (multiplyMatrices(rotationMatrix, secondPoint));
-
-	const auto shiftMatrix = vector3
-	{
-		(firstPoint.x - secondPoint.x),
-		(firstPoint.y - secondPoint.y),
-		(firstPoint.z - secondPoint.z)
-	};
-	return shiftMatrix;
-}
-
 vector3 computeTranslation(const std::unordered_set<vector3>& a, const std::unordered_set<vector3>& b, const std::vector<std::vector<double>>& rotationMatrix)
 {
 	const auto firstPoint = findCenterOfGravity(a);
@@ -478,15 +265,6 @@ vector3 computeTranslation(const std::unordered_set<vector3>& a, const std::unor
 	return shiftMatrix;
 }
 
-bool isDeterminantEqualTo1(const std::vector<std::vector<double>>& a)
-{
-	return areSame(a[0][0] * a[1][1] * a[2][2] 
-		+ a[1][0] * a[2][1] * a[0][2]
-		+ a[2][0] * a[0][1] * a[1][2]
-		- a[2][0] * a[1][1] * a[0][2]
-		- a[0][0] * a[2][1] * a[1][2]
-		- a[1][0] * a[0][1] * a[2][2], 1);
-}
 
 double manhattanDistance(const vector3& a, const vector3& b)
 {
