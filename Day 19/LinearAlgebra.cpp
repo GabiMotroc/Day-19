@@ -7,32 +7,27 @@
 
 constexpr double epsilon = 100000 * DBL_EPSILON;
 
+template<>
+struct std::hash<vector3>
+{
+	std::size_t operator()(const vector3& k) const noexcept
+	{
+		using std::size_t;
+		using std::hash;
+
+		// Compute individual hash values for first,
+		// second and third and combine them using XOR
+		// and bit shifting:
+
+		return ((hash<double>()(k.x)
+			^ (hash<double>()(k.y) << 1)) >> 1)
+			^ (hash<double>()(k.z) << 1);
+	}
+};
+
 bool areSame(const double a, const double b)
 {
 	return fabs(a - b) < epsilon;
-}
-
-
-namespace std
-{
-	template<>
-	struct std::hash<vector3>
-	{
-		std::size_t operator()(const vector3& k) const noexcept
-		{
-			using std::size_t;
-			using std::hash;
-			using std::string;
-
-			// Compute individual hash values for first,
-			// second and third and combine them using XOR
-			// and bit shifting:
-
-			return ((hash<double>()(k.x)
-				^ (hash<double>()(k.y) << 1)) >> 1)
-				^ (hash<double>()(k.z) << 1);
-		}
-	};
 }
 
 vector3 transform2DArrayIntoPoint(const std::vector<std::vector<double>>& a)
@@ -110,9 +105,9 @@ std::vector<std::vector<double>> multiplyMatrices(const std::vector<std::vector<
 	return c;
 }
 
-vector3 multiplyMatrices(const std::vector<std::vector<double>>& a, const vector3& point) {
-
-	auto b = transformPointTo2DArray(point);
+vector3 multiplyMatrices(const std::vector<std::vector<double>>& a, const vector3& point)
+{
+	const auto b = transformPointTo2DArray(point);
 
 	const auto result = multiplyMatrices(a, b);
 
@@ -216,6 +211,24 @@ vector3 findCenterOfGravity(const std::vector<std::pair<vector3, vector3>>& vect
 	return result;
 }
 
+vector3 findCenterOfGravity(const std::unordered_set<vector3>& vectors)
+{
+	vector3 result;
+
+	for (const auto& point : vectors)
+	{
+		result.x += point.x;
+		result.y += point.y;
+		result.z += point.z;
+	}
+
+	result.x = result.x / static_cast<double>(vectors.size());
+	result.y = result.y / static_cast<double>(vectors.size());
+	result.z = result.z / static_cast<double>(vectors.size());
+
+	return result;
+}
+
 std::vector<std::vector<double>> transpose(const std::vector<std::vector<double>>& a) {
 	const int rows = a.size();
 
@@ -233,6 +246,7 @@ std::vector<std::vector<double>> transpose(const std::vector<std::vector<double>
 
 	return r;
 }
+
 std::vector<std::vector<double>> getRotationMatrix2(const vector3& first, const vector3& second)
 {
 	auto result = generateMatrix(3, 3);
@@ -300,29 +314,29 @@ std::vector<std::vector<double>> getRotationMatrix2(const vector3& first, const 
 
 std::vector<std::vector<double>> getRotationMatrix3(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b)
 {
-	const auto centroidA = findCenterOfGravity(a);
+	const auto centroidA = findCenterOfGravity(a); 
 	const auto centroidB = findCenterOfGravity(b);
 
 	std::unordered_set<vector3> firstVectors;
 	std::unordered_set<vector3> secondsVectors;
 
-	for (const auto& pair : a)
+	for (const auto& [fst, snd] : a)
 	{
-		firstVectors.insert(vector3{ pair.first.x - centroidA.x, pair.first.y - centroidA.y, pair.first.z - centroidA.z });
-		firstVectors.insert(vector3{ pair.second.x - centroidA.x, pair.second.y - centroidA.y, pair.second.z - centroidA.z });
+		firstVectors.insert(vector3{ fst.x - centroidA.x, fst.y - centroidA.y, fst.z - centroidA.z });
+		firstVectors.insert(vector3{ snd.x - centroidA.x, snd.y - centroidA.y, snd.z - centroidA.z });
 	}
 
-	for (const auto& pair : b)
+	for (const auto& [fst, snd] : b)
 	{
-		secondsVectors.insert(vector3{ pair.first.x - centroidB.x, pair.first.y - centroidB.y, pair.first.z - centroidB.z });
-		secondsVectors.insert(vector3{ pair.second.x - centroidB.x, pair.second.y - centroidB.y, pair.second.z - centroidB.z });
+		secondsVectors.insert(vector3{ fst.x - centroidB.x, fst.y - centroidB.y, fst.z - centroidB.z });
+		secondsVectors.insert(vector3{ snd.x - centroidB.x, snd.y - centroidB.y, snd.z - centroidB.z });
 	}
 
 	std::vector<std::vector<double>> result;
 
-	for (const auto firstVector : firstVectors)
+	for (const auto& firstVector : firstVectors)
 	{
-		for (const auto secondVector : secondsVectors)
+		for (const auto& secondVector : secondsVectors)
 		{
 			if(areSame(fabs(firstVector.x), fabs(secondVector.x))
 				and areSame(fabs(firstVector.y), fabs(secondVector.y))
@@ -366,16 +380,94 @@ std::vector<std::vector<double>> getRotationMatrix3(const std::vector<std::pair<
 	return result;
 }
 
+std::vector<std::vector<double>> getRotationMatrix3(const std::unordered_set<vector3>& a, const std::unordered_set<vector3>& destination)
+{
+	std::unordered_set<vector3> firstVectors;
+	std::unordered_set<vector3> secondVectors;
+
+	const auto centroidA = findCenterOfGravity(a);
+	const auto centroidB = findCenterOfGravity(destination);
+
+	for (const auto& point : a)
+	{
+		firstVectors.insert(vector3{ point.x - centroidA.x, point.y - centroidA.y, point.z - centroidA.z });
+	}
+
+	for (const auto& point : destination)
+	{
+		secondVectors.insert(vector3{ point.x - centroidB.x, point.y - centroidB.y, point.z - centroidB.z });
+	}
+
+	std::vector<std::vector<double>> result;
+
+	for (const auto& firstVector : firstVectors)
+	{
+		for (const auto& secondVector : secondVectors)
+		{
+			if (areSame(fabs(firstVector.x), fabs(secondVector.x))
+				and areSame(fabs(firstVector.y), fabs(secondVector.y))
+				and areSame(fabs(firstVector.z), fabs(secondVector.z)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+			if (areSame(fabs(firstVector.x), fabs(secondVector.y))
+				and areSame(fabs(firstVector.y), fabs(secondVector.z))
+				and areSame(fabs(firstVector.z), fabs(secondVector.x)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+			if (areSame(fabs(firstVector.x), fabs(secondVector.z))
+				and areSame(fabs(firstVector.y), fabs(secondVector.x))
+				and areSame(fabs(firstVector.z), fabs(secondVector.y)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+			if (areSame(fabs(firstVector.x), fabs(secondVector.x))
+				and areSame(fabs(firstVector.y), fabs(secondVector.z))
+				and areSame(fabs(firstVector.z), fabs(secondVector.y)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+			if (areSame(fabs(firstVector.x), fabs(secondVector.z))
+				and areSame(fabs(firstVector.y), fabs(secondVector.y))
+				and areSame(fabs(firstVector.z), fabs(secondVector.x)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+			if (areSame(fabs(firstVector.x), fabs(secondVector.y))
+				and areSame(fabs(firstVector.y), fabs(secondVector.x))
+				and areSame(fabs(firstVector.z), fabs(secondVector.z)))
+			{
+				return getRotationMatrix2(firstVector, secondVector);
+			}
+		}
+	}
+
+	return result;
+}
+
 vector3 computeTranslation(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b, const std::vector<std::vector<double>>& rotationMatrix)
 {
-	auto firstPoint = findCenterOfGravity(a);
-	//firstPoint = (multiplyMatrices(rotationMatrix, firstPoint));
-	//auto aux = transpose(rotationMatrix);
+	const auto firstPoint = findCenterOfGravity(a);
 
 	auto secondPoint = findCenterOfGravity(b);
 	secondPoint = (multiplyMatrices(rotationMatrix, secondPoint));
 
-	//std::cout << firstPoint.x - secondPoint.x << ',' << firstPoint.y - secondPoint.y << ',' << firstPoint.z - secondPoint.z << '\n';
+	const auto shiftMatrix = vector3
+	{
+		(firstPoint.x - secondPoint.x),
+		(firstPoint.y - secondPoint.y),
+		(firstPoint.z - secondPoint.z)
+	};
+	return shiftMatrix;
+}
+
+vector3 computeTranslation(const std::unordered_set<vector3>& a, const std::unordered_set<vector3>& b, const std::vector<std::vector<double>>& rotationMatrix)
+{
+	const auto firstPoint = findCenterOfGravity(a);
+
+	auto secondPoint = findCenterOfGravity(b);
+	secondPoint = (multiplyMatrices(rotationMatrix, secondPoint));
 
 	const auto shiftMatrix = vector3
 	{
@@ -388,7 +480,6 @@ vector3 computeTranslation(const std::vector<std::pair<vector3, vector3>>& a, co
 
 bool isDeterminantEqualTo1(const std::vector<std::vector<double>>& a)
 {
-
 	return areSame(a[0][0] * a[1][1] * a[2][2] 
 		+ a[1][0] * a[2][1] * a[0][2]
 		+ a[2][0] * a[0][1] * a[1][2]

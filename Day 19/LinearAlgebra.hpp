@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_set>
 #include <vector>
 #include "vector3.hpp"
 
@@ -42,7 +43,11 @@ std::vector<std::vector<double>> getRotationMatrix2(const vector3& first, const 
 
 std::vector<std::vector<double>> getRotationMatrix3(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b);
 
+std::vector<std::vector<double>> getRotationMatrix3(const std::unordered_set<vector3>& a, const std::unordered_set<vector3>& destination);
+
 vector3 computeTranslation(const std::vector<std::pair<vector3, vector3>>& a, const std::vector<std::pair<vector3, vector3>>& b, const std::vector<std::vector<double>>& rotationMatrix);
+
+vector3 computeTranslation(const std::unordered_set<vector3>& a, const std::unordered_set<vector3>& b, const std::vector<std::vector<double>>& rotationMatrix);
 
 void getCofactor(std::vector<std::vector<double>> mat, std::vector<std::vector<double>> temp, int p, int q, int n);
 

@@ -1,9 +1,12 @@
 // Day 19.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+// https://adventofcode.com/2021/day/19
 
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <map>
+#include <optional>
+#include <stack>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,14 +14,12 @@
 
 #include "LinearAlgebra.hpp"
 
-#pragma region Structs
-
-struct Scanner
-{
-	int id{};
-	bool used = false;
-	std::vector<vector3> points;
-};
+struct PairHash;
+using std::vector;
+using std::unordered_set;
+using std::pair;
+using std::unordered_map;
+using std::string;
 
 template<>
 struct std::hash<vector3>
@@ -27,14 +28,13 @@ struct std::hash<vector3>
 	{
 		using std::size_t;
 		using std::hash;
-		using std::string;
 
 		// Compute individual hash values for first,
 		// second and third and combine them using XOR
 		// and bit shifting:
 
 		return ((hash<double>()(k.x)
-				^ (hash<double>()(k.y) << 1)) >> 1)
+			^ (hash<double>()(k.y) << 1)) >> 1)
 			^ (hash<double>()(k.z) << 1);
 	}
 };
@@ -47,24 +47,95 @@ struct PairHash {
 	}
 };
 
+
+#pragma region Structs
+
+struct Distance
+{
+	double distance;
+	vector3 a, b;
+};
+
+struct Scanner
+{
+	int id{};
+	bool used = false;
+	vector<vector3> points;
+	std::optional<int> reference;
+
+	unordered_map<double, pair<vector3, vector3>> distances;
+	vector<vector<double>> rotationMatrix;
+	vector3 shift;
+
+	pair<unordered_set<vector3>, unordered_set<vector3>> findCommonBeacons(Scanner const& s);
+
+	void computeTransformation(Scanner const& s, const pair<unordered_set<vector3>, unordered_set<vector3>>&);
+	void computeDistances();
+};
+
+pair<unordered_set<vector3>, unordered_set<vector3>> Scanner::findCommonBeacons(Scanner const& destination)
+{
+	unordered_set<vector3> pointsIn;
+	unordered_set<vector3> pointsInDestination;
+
+
+	for (auto& [key, value] : distances)
+	{
+		if(destination.distances.find(key) != destination.distances.end())
+		{
+			const auto& [fst, snd] = destination.distances.at(key);
+			pointsInDestination.insert(fst);
+			pointsInDestination.insert(snd);
+
+			pointsIn.insert(value.first);
+			pointsIn.insert(value.second);
+		}
+	}
+
+	return std::make_pair(pointsInDestination, pointsIn);
+}
+
+void Scanner::computeTransformation(Scanner const& s, const pair<unordered_set<vector3>, unordered_set<vector3>>& mapping)
+{
+	rotationMatrix = getRotationMatrix3(mapping.second, mapping.first);
+	shift = computeTranslation(mapping.first, mapping.second, rotationMatrix);
+
+	reference = s.id;
+}
+
+void Scanner::computeDistances()
+{
+	for (auto i = 0ULL; i < points.size(); ++i)
+	{
+		for (auto j = i + 1; j < points.size(); ++j)
+		{
+			if (i != j)
+			{
+				const auto aux = getDistance(points[i], points[j]);
+				distances[aux] = std::make_pair(points[i], points[j]);
+			}
+		}
+	}
+}
+
+
 #pragma endregion
 
-std::vector<Scanner> scanners;
-std::unordered_set<vector3> solution;
+unordered_set<vector3> solution;
 
 std::ifstream fin("19.txt");
 std::ifstream fin2("solution.txt");
 
-vector3 splitStringInPoint(std::string s)
+vector3 splitStringInPoint(string s)
 {
-	std::vector<double> aux;
-	const std::string delimiter = ",";
+	vector<double> aux;
+	const string delimiter = ",";
 	
 	size_t pos;
 
-	while ((pos = s.find(delimiter)) != std::string::npos) 
+	while ((pos = s.find(delimiter)) != string::npos) 
 	{
-		std::string token = s.substr(0, pos);
+		string token = s.substr(0, pos);
 		aux.push_back(stoi(token));
 		s.erase(0, pos + delimiter.length());
 	}
@@ -73,9 +144,11 @@ vector3 splitStringInPoint(std::string s)
 	return vector3{ aux[0], aux[1], aux[2] };
 }
 
-void readInput()
+vector<Scanner> readInput()
 {
-	std::string s;
+	string s;
+
+	vector<Scanner> scanners;
 
 	Scanner aux;
 	int counter = 0;
@@ -84,8 +157,10 @@ void readInput()
 		if (s.empty())
 		{
 			aux.id = counter++;
+			aux.computeDistances();
 			scanners.push_back(aux);
 			aux.points.clear();
+			aux.distances.clear();
 			continue;
 		}
 
@@ -95,13 +170,27 @@ void readInput()
 		aux.points.push_back(splitStringInPoint(s));
 	}
 	aux.id++;
+	aux.computeDistances();
 	scanners.push_back(aux);
+
+	scanners[0].reference = 0;
+
+	scanners[0].rotationMatrix =
+	{
+		{1, 0, 0},
+		{0, 1, 0},
+		{0, 0, 1}
+	};
+
+	scanners[0].shift = vector3{ 0,0,0 };
+
+	return scanners;
 
 }
 
 void readSolution()
 {
-	std::string s;
+	string s;
 	while (getline(fin2, s))
 	{
 		const auto aux = splitStringInPoint(s);
@@ -109,9 +198,9 @@ void readSolution()
 	}
 }
 
-std::unordered_map<double, std::unordered_set<std::pair<vector3, vector3>, PairHash>> getDistancesOfScanner(std::vector<Scanner>::const_reference scanner1)
+unordered_map<double, unordered_set<std::pair<vector3, vector3>, PairHash>> getDistancesOfScanner(vector<Scanner>::const_reference scanner1)
 {
-	std::unordered_map<double, std::unordered_set<std::pair<vector3, vector3>, PairHash>> result;
+	unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>> result;
 	for (std::size_t i = 0; i < scanner1.points.size(); ++i)
 	{
 		for (std::size_t j = i + 1; j < scanner1.points.size(); ++j)
@@ -126,9 +215,9 @@ std::unordered_map<double, std::unordered_set<std::pair<vector3, vector3>, PairH
 	return result;
 }
 
-Scanner connect2Scanners(std::vector<Scanner>::const_reference scanners1, std::vector<Scanner>::const_reference scanners2, const std::vector<std::vector<double>>& rotationMatrix, const vector3& shift)
+Scanner connect2Scanners(vector<Scanner>::const_reference scanners1, vector<Scanner>::const_reference scanners2, const vector<vector<double>>& rotationMatrix, const vector3& shift)
 {
-	std::unordered_set<vector3> result;
+	unordered_set<vector3> result;
 
 	for (const auto& point : scanners1.points)
 	{
@@ -154,99 +243,166 @@ Scanner connect2Scanners(std::vector<Scanner>::const_reference scanners1, std::v
 		result.insert(aux);
 	}
 
-	return Scanner{scanners1.id, true, std::vector<vector3>(result.begin(), result.end())};
+	return Scanner{scanners1.id, true, vector<vector3>(result.begin(), result.end())};
 }
 
-std::pair<std::vector<std::pair<vector3, vector3>>, std::vector<std::pair<vector3, vector3>>>
+pair<vector<pair<vector3, vector3>>, vector<pair<vector3, vector3>>>
 extractCommonPoints(
-	const std::unordered_map<double, std::unordered_set<std::pair<vector3, vector3>, PairHash>>& distance1,
-	std::unordered_map<double, std::unordered_set<std::pair<vector3, vector3>, PairHash>>& distance2,
+	const unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>>& distance1,
+	unordered_map<double, unordered_set<pair<vector3, vector3>, PairHash>>& distance2,
 	int counter)
 {
 
-	std::unordered_map<vector3, int> pointFrequency1;
-	std::unordered_map<vector3, int> pointFrequency2;
+	unordered_map<vector3, int> pointFrequency1;
+	unordered_map<vector3, int> pointFrequency2;
 
-	std::vector<std::pair<vector3, vector3>> vectors1;
-	std::vector<std::pair<vector3, vector3>> vectors2;
+	unordered_map<double, pair<vector3, vector3>> vectors1;
+	unordered_map<double, pair<vector3, vector3>> vectors2;
 
 	for (auto& [distance, points] : distance1)
 	{
 		if (distance2.find(distance) != distance2.end())
 		{
-			if (auto aux = distance2[distance]; true/* points.size() == 1 and aux.size() == 1*/)
+			if (auto aux = distance2[distance];
+				points.size() == 1 and aux.size() == 1)
 			{
 				const auto firstVector = *(points.begin());
 				const auto secondVector = *(aux.begin());
-				vectors1.push_back(firstVector);
-				vectors2.push_back(secondVector);
+				vectors1[distance] = firstVector;
+				vectors2[distance] = secondVector;
 			}
+
 		}
 	}
 
-	if (vectors1.size() != vectors2.size())
+	for (auto it = vectors1.begin(); it != vectors1.end();)
 	{
-
-		if (vectors1.size() < vectors2.size())
-		{
-			vectors2.erase(
-				std::remove_if(
-					vectors2.begin(),
-					vectors2.end(),
-					[&vectors1](auto a)
-					{
-
-					}
-				),
-				vectors2.end()
-						);
-		}
+		if (vectors2.find(it->first) == vectors2.end())
+			it = vectors1.erase(it);
+		else
+			++it;
 	}
 
-	if (counter == 66)
-		return std::make_pair(vectors1, vectors2);
-
-	for (const auto & [first, second] : vectors1)
+	for (auto it = vectors2.begin(); it != vectors2.end();)
 	{
-		pointFrequency1[first]++;
-		pointFrequency1[second]++;
+		if (vectors1.find(it->first) == vectors1.end())
+			it = vectors2.erase(it);
+		else
+			++it;
 	}
-
-	for (const auto & [first, second] : vectors2)
-	{
-		pointFrequency2[first]++;
-		pointFrequency2[second]++;
-	}
-
-	vectors1.erase(
+	/*vectors1.erase(
 		std::remove_if(
 			vectors1.begin(),
 			vectors1.end(),
-			[&pointFrequency1](const std::pair<vector3, vector3>& pair)
+			[&vectors2](const std::pair<double, std::pair<vector3, vector3>>& pair)
 			{
-				return (pointFrequency1[pair.first] < 11 or pointFrequency1[pair.second] < 11);
+				return (vectors2.find(pair.first) == vectors2.end()) == false;
 			}
 		),
 		vectors1.end()
-				);
-
-	vectors2.erase(
-		std::remove_if(
-			vectors2.begin(),
-			vectors2.end(),
-			[&pointFrequency2](const std::pair<vector3, vector3>& pair)
-			{
-				return (pointFrequency2[pair.first] < 11 or pointFrequency2[pair.second] < 11);
-			}
-		),
-		vectors2.end()
-				);
+				);*/
 
 
-	return std::make_pair(vectors1, vectors2);
+
+	if (counter == 66)
+	{
+		vector<pair<vector3, vector3>> result1;
+		result1.reserve(vectors1.size());
+
+		for (const auto& [_, second] : vectors1)
+		{
+			result1.push_back(second);
+		}
+
+		vector<pair<vector3, vector3>> result2;
+		result2.reserve(vectors2.size());
+
+		for (const auto& [_, second] : vectors2)
+		{
+			result2.push_back(second);
+		}
+
+		return make_pair(result1, result2);
+	}
+
+	for (const auto& [first, second] : vectors1)
+	{
+		pointFrequency1[second.first]++;
+		pointFrequency1[second.second]++;
+	}
+
+	for (const auto& [first, second] : vectors2)
+	{
+		pointFrequency2[second.first]++;
+		pointFrequency2[second.second]++;
+	}
+
+	//std::map<int, int> mostProbableNumberOfPoints;
+	//for (const auto & [_, second] : pointFrequency1)
+	//{
+	//	mostProbableNumberOfPoints[second]++;
+	//}
+	///*for (const auto& [_, second] : pointFrequency2)
+	//{
+	//	mostProbableNumberOfPoints[second]++;
+	//}*/
+
+	//auto max = std::max_element(mostProbableNumberOfPoints.begin(), mostProbableNumberOfPoints.end(),
+	//	[](const std::pair<int, int>& p1, const std::pair<int, int>& p2) {
+	//		return p1.second < p2.second; });
+
+	//for (auto it = vectors1.begin(); it != vectors1.end();)
+	//{
+	//	if (pointFrequency1[it->second.first] != max->second - 1 or pointFrequency1[it->second.second] != max->second - 1)
+	//		it = vectors1.erase(it);
+	//	else
+	//		++it;
+	//}
+
+	//for (auto it = vectors2.begin(); it != vectors2.end();)
+	//{
+	//	if (pointFrequency2[it->second.first] != max->second - 1 or pointFrequency2[it->second.second] != max->second - 1)
+	//		it = vectors2.erase(it);
+	//	else
+	//		++it;
+	//}
+
+
+	for (auto it = vectors1.begin(); it != vectors1.end();)
+	{
+		if (vectors2.find(it->first) == vectors2.end())
+			it = vectors1.erase(it);
+		else
+			++it;
+	}
+
+	for (auto it = vectors2.begin(); it != vectors2.end();)
+	{
+		if (vectors1.find(it->first) == vectors1.end())
+			it = vectors2.erase(it);
+		else
+			++it;
+	}
+	{
+		vector<pair<vector3, vector3>> result1;
+		result1.reserve(vectors1.size());
+		for (const auto& [_, second] : vectors1)
+		{
+			result1.push_back(second);
+		}
+
+		vector<pair<vector3, vector3>> result2;
+		result2.reserve(vectors2.size());
+		for (const auto& [_, second] : vectors2)
+		{
+			result2.push_back(second);
+		}
+
+		return make_pair(result1, result2);
+	}
 }
 
-Scanner doWork(std::vector<Scanner>::const_reference scanner1, std::vector<Scanner>::const_reference scanner2)
+Scanner doWork(vector<Scanner>::const_reference scanner1, vector<Scanner>::const_reference scanner2)
 {
 	auto distance1 = getDistancesOfScanner(scanner1);
 	auto distance2 = getDistancesOfScanner(scanner2);
@@ -268,59 +424,23 @@ Scanner doWork(std::vector<Scanner>::const_reference scanner1, std::vector<Scann
 		auto [vectors1, vectors2] =
 			extractCommonPoints(distance1, distance2, counter);
 
-		std::sort(vectors1.begin(), vectors1.end(),
-			[](const std::pair<vector3, vector3>& a, const std::pair<vector3, vector3>& b) -> bool
+		if(vectors1.empty() or vectors2.empty())
+			return Scanner{ -1, false, vector<vector3>() };
+
+		stable_sort(vectors1.begin(), vectors1.end(),
+			[](const pair<vector3, vector3>& a, const pair<vector3, vector3>& b) -> bool
 			{
 				return getDistance(a.first, a.second) < getDistance(b.first, b.second);
 			});
 
-		std::sort(vectors2.begin(), vectors2.end(),
-			[](const std::pair<vector3, vector3>& a, const std::pair<vector3, vector3>& b) -> bool
+		stable_sort(vectors2.begin(), vectors2.end(),
+			[](const pair<vector3, vector3>& a, const pair<vector3, vector3>& b) -> bool
 			{
 				return getDistance(a.first, a.second) < getDistance(b.first, b.second);
 			});
 
 		const auto rotationMatrix = getRotationMatrix3(vectors2, vectors1);
 
-		for (const auto& matrix : rotationMatrix)
-		{
-			for (const double& value : matrix)
-			{
-				std::cout << value << ' ';
-			}
-			std::cout << '\n';
-		}
-		/*
-		//auto i = 0;
-		//auto vectorA = getVector(vectors1[i]);
-		//auto vectorB = getVector(vectors2[i]);
-		//i++;
-
-		//while ((areSame(fabs(vectorA.x), fabs(vectorA.y))
-		//	or areSame(fabs(vectorA.y), fabs(vectorA.z))
-		//	or areSame(fabs(vectorA.x), fabs(vectorA.z))
-		//	or areSame(fabs(vectorA.x), 0)
-		//	or areSame(fabs(vectorA.y), 0)
-		//	or areSame(fabs(vectorA.z), 0)
-		//	/*or isDeterminantEqualTo1(rotationMatrix) == false)
-		//	and i < 66)
-		//{
-		//	vectorA = getVector(vectors1[i]);
-		//	vectorB = getVector(vectors2[i]);
-		//	i++;
-		//}
-
-		//auto rotationMatrix = std::vector<std::vector<double>>();
-
-		//try
-		//{
-		//	rotationMatrix = getRotationMatrix2(vectorB, vectorA);
-		//}
-		//catch (int e)
-		//{
-		//	std::cout << e;
-		//}
-		*/
 		const auto shiftMatrix = computeTranslation(vectors1, vectors2, rotationMatrix);
 
 		auto result = connect2Scanners(scanner1, scanner2, rotationMatrix, shiftMatrix);
@@ -328,14 +448,16 @@ Scanner doWork(std::vector<Scanner>::const_reference scanner1, std::vector<Scann
 		return result;
 	}
 
-	return Scanner{ -1, false, std::vector<vector3>() };
+	return Scanner{ -1, false, vector<vector3>() };
 }
 
 Scanner solve1()
 {
+	vector<Scanner> scanners = readInput();
+
 	Scanner scanner;
 	bool firstPass = true;
-	for (auto i = 0; i < scanners.size() - 1; ++i)
+	for (auto i = 0L; i < scanners.size() - 1; ++i)
 	{
 		for (int j = i + 1; j < scanners.size(); ++j)
 		{
@@ -366,29 +488,130 @@ Scanner solve1()
 	return scanner;
 }
 
+void solve2()
+{
+	vector<Scanner> scanners = readInput();
+	vector known{ scanners[0] };
+
+	while (known.size() < scanners.size())
+	{
+		const auto size = known.size();
+		for (auto i = 0ULL; i < size; ++i)
+		{
+			auto const& scanner = known[i];
+			for (auto & value : scanners)
+			{
+				if(value.reference.has_value())
+					continue;
+				if(auto mapping = value.findCommonBeacons(scanner); mapping.first.size() == 12 and mapping.second.size() == 12)
+				{
+					value.computeTransformation(scanner, mapping);
+					known.push_back(value);
+					break;
+				}
+			}
+		}
+	}
+
+	unordered_set<vector3> uniquePoints;
+
+	vector<pair<vector<vector<double>>, vector3>> newTransformations(scanners.size());
+	newTransformations.reserve(scanners.size());
+
+	for ( auto i = 1ULL; i < scanners.size(); i++)
+	{
+
+		auto a = scanners[i].reference;
+
+		if (a.value() == 0)
+			continue;
+
+		std::vector<int> references;
+		references.push_back(i);
+
+		while(a.value() != 0)
+		{
+			references.push_back(a.value());
+			a = scanners[a.value()].reference;
+		}
+
+		//std::cout << references.size();
+
+		vector3 newShift = scanners[references[0]].shift;
+		vector<vector<double>> newRotationMatrix = scanners[references[0]].rotationMatrix;
+
+		for (int j = 1; j < references.size(); ++j)
+		{
+			auto rotMat = scanners[references[j]].rotationMatrix;
+			newRotationMatrix = multiplyMatrices(rotMat, newRotationMatrix);
+
+			auto b = scanners[references[j]].shift;
+			newShift = multiplyMatrices(scanners[references[j]].rotationMatrix, newShift);
+
+			newShift.x += b.x;
+			newShift.y += b.y;
+			newShift.z += b.z;
+			newShift.x = round(newShift.x);
+			newShift.y = round(newShift.y);
+			newShift.z = round(newShift.z);
+		}
+
+		
+		newTransformations[i].first = newRotationMatrix;
+		newTransformations[i].second = newShift;
+	}
+
+	for (auto i = 1ULL; i < scanners.size(); ++i)
+	{
+		if (newTransformations[i].first.empty() == false) 
+		{
+			scanners[i].rotationMatrix = newTransformations[i].first;
+			scanners[i].shift = newTransformations[i].second;
+		}
+	}
+
+	for (int i = 0; i < scanners.size(); ++i)
+	{
+		
+		for (const auto & point : scanners[i].points)
+		{
+			if (i != 0) 
+			{
+				auto a = multiplyMatrices(scanners[i].rotationMatrix, point);
+				auto b = scanners[i].shift;
+
+				a.x += b.x;
+				a.y += b.y;
+				a.z += b.z;
+
+				a.x = round(a.x);
+				a.y = round(a.y);
+				a.z = round(a.z);
+
+				if (solution.find(a) == solution.end())
+					std::cout << "";
+
+				uniquePoints.insert(a);
+			}
+			else
+			{
+				if (solution.find(point) == solution.end())
+					std::cout << "";
+
+				uniquePoints.insert(point);
+			}
+		}
+	}
+
+	std::cout << uniquePoints.size();
+}
+
 int main()
 {
-	readInput();
+	//readInput();
 	readSolution();
 
-
-	const auto scanner = solve1();
-	for (const auto& _scanner : scanners)
-	{
-		std::cout << _scanner.id << ": " << _scanner.used << '\n';
-	}
-
-	std::cout << scanner.points.size() << '\n';
-
-	auto debug = scanner.points;
-	std::sort(debug.begin(), debug.end(),
-		[](const vector3& a, const vector3& b) -> bool
-		{
-			return a.x * a.x + a.y * a.y + a.z * a.z < b.x* b.x + b.y * b.y + b.z * b.z;
-		});
-
-	for (const auto& point :debug)
-	{
-		std::cout << point << '\n';
-	}
+	//const auto scanner = solve1();
+	solve2();
+	//std::cout << scanner.points.size() << '\n';
 }
