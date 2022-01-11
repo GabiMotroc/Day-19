@@ -603,7 +603,16 @@ void solve2()
 		}
 	}
 
-	std::cout << uniquePoints.size();
+	double max = 0;
+	for (const auto & scanner1 : scanners)
+	{
+		for (const auto & scanner2 : scanners)
+		{
+			if (const auto aux = manhattanDistance(scanner1.shift, scanner2.shift); aux > max)
+				max = aux;
+		}
+	}
+	std::cout << uniquePoints.size() << '\n' << max;
 }
 
 int main()

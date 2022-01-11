@@ -52,3 +52,5 @@ vector3 computeTranslation(const std::unordered_set<vector3>& a, const std::unor
 void getCofactor(std::vector<std::vector<double>> mat, std::vector<std::vector<double>> temp, int p, int q, int n);
 
 bool isDeterminantEqualTo1(const std::vector<std::vector<double>>& matrix);
+
+double manhattanDistance(const vector3& a, const vector3& b);

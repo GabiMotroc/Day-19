@@ -487,3 +487,11 @@ bool isDeterminantEqualTo1(const std::vector<std::vector<double>>& a)
 		- a[0][0] * a[2][1] * a[1][2]
 		- a[1][0] * a[0][1] * a[2][2], 1);
 }
+
+double manhattanDistance(const vector3& a, const vector3& b)
+{
+	double result = round(fabs(a.x - b.x));
+	result += round(fabs(a.y - b.y));
+	result += round(fabs(a.z - b.z));
+	return result;
+}
