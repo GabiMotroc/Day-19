@@ -2,11 +2,11 @@
 // https://adventofcode.com/2021/day/19
 
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <fstream>
-#include <map>
+#include <iomanip>
 #include <optional>
-#include <stack>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -46,7 +46,6 @@ struct PairHash {
 		return h1 ^ h2;
 	}
 };
-
 
 #pragma region Structs
 
@@ -149,6 +148,7 @@ vector<Scanner> readInput()
 	string s;
 
 	vector<Scanner> scanners;
+	scanners.reserve(30);
 
 	Scanner aux;
 	int counter = 0;
@@ -535,8 +535,6 @@ void solve2()
 			a = scanners[a.value()].reference;
 		}
 
-		//std::cout << references.size();
-
 		vector3 newShift = scanners[references[0]].shift;
 		vector<vector<double>> newRotationMatrix = scanners[references[0]].rotationMatrix;
 
@@ -612,15 +610,19 @@ void solve2()
 				max = aux;
 		}
 	}
-	std::cout << uniquePoints.size() << '\n' << max;
+	std::cout << uniquePoints.size() << '\n' << max << '\n';
 }
 
 int main()
 {
-	//readInput();
-	readSolution();
+	using namespace std::chrono;
 
-	//const auto scanner = solve1();
+	readSolution();
+	const auto start = high_resolution_clock::now();
 	solve2();
-	//std::cout << scanner.points.size() << '\n';
+	const auto stop = high_resolution_clock::now();
+
+	const auto elapsed = duration_cast<milliseconds>(stop - start).count();
+	std::cout << std::setprecision(4) << elapsed << "ms\n";
+
 }
